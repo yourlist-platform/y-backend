@@ -64,4 +64,5 @@ jobs:
           composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
           php artisan migrate --force
           php artisan db:seed --force
+          php artisan optimize
           EOF
