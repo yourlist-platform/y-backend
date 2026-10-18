@@ -16,4 +16,4 @@ if (app()->environment(['local', 'testing'])) {
     })->name('stripe.check-payment-with-clientsecret');
 }
 
-require __DIR__.'/settings.php';
+require __DIR__.'/settings.php';    
