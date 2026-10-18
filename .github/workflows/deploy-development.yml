@@ -1,0 +1,68 @@
+name: Deploy development
+
+on:
+  push:
+    branches:
+      - development
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-development
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Update development server
+    runs-on: ubuntu-latest
+    environment: Yourlist Development
+    timeout-minutes: 30
+
+    steps:
+      - name: Deploy to AWS development
+        env:
+          SSH_HOST: ${{ secrets.DEV_SSH_HOST }}
+          SSH_USER: ${{ secrets.DEV_SSH_USER }}
+          SSH_KEY: ${{ secrets.DEV_SSH_KEY }}
+          SSH_PORT: ${{ secrets.DEV_SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SSH_HOST}" ] || [ -z "${SSH_USER}" ] || [ -z "${SSH_KEY}" ] || [ -z "${DEPLOY_PATH}" ]; then
+            echo "Missing required secrets: DEV_SSH_HOST, DEV_SSH_USER, DEV_SSH_KEY, DEV_DEPLOY_PATH"
+            exit 1
+          fi
+
+          PORT="${SSH_PORT:-22}"
+          if [ -z "${PORT}" ]; then
+            PORT=22
+          fi
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${SSH_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts
+
+          ssh \
+            -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${SSH_USER}@${SSH_HOST}" \
+            "bash -s" <<EOF
+          set -euo pipefail
+          export GIT_TERMINAL_PROMPT=0
+          export COMPOSER_NO_INTERACTION=1
+
+          cd $(printf '%q' "${DEPLOY_PATH}")
+
+          git fetch origin development
+          git checkout development
+          git pull --ff-only origin development
+
+          composer install --no-interaction --prefer-dist --optimize-autoloader
+          php artisan migrate --force
+          php artisan db:seed --force
+          EOF

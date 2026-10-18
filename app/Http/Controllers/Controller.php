@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
+// Test 
 abstract class Controller
 {
     protected function success(?string $message = null, mixed $data = null, int $status = 200): JsonResponse

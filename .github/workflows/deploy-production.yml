@@ -1,0 +1,67 @@
+name: Deploy production
+
+on:
+  push:
+    branches:
+      - production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Update production server
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Deploy to AWS production
+        env:
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SSH_HOST}" ] || [ -z "${SSH_USER}" ] || [ -z "${SSH_KEY}" ] || [ -z "${DEPLOY_PATH}" ]; then
+            echo "Missing required secrets: PROD_SSH_HOST, PROD_SSH_USER, PROD_SSH_KEY, PROD_DEPLOY_PATH"
+            exit 1
+          fi
+
+          PORT="${SSH_PORT:-22}"
+          if [ -z "${PORT}" ]; then
+            PORT=22
+          fi
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${SSH_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts
+
+          ssh \
+            -i ~/.ssh/deploy_key \
+            -p "${PORT}" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=accept-new \
+            "${SSH_USER}@${SSH_HOST}" \
+            "bash -s" <<EOF
+          set -euo pipefail
+          export GIT_TERMINAL_PROMPT=0
+          export COMPOSER_NO_INTERACTION=1
+
+          cd $(printf '%q' "${DEPLOY_PATH}")
+
+          git fetch origin production
+          git checkout production
+          git pull --ff-only origin production
+
+          composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
+          php artisan migrate --force
+          php artisan db:seed --force
+          EOF
