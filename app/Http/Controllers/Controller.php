@@ -10,6 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 // Test 
+// Test pipeline
 abstract class Controller
 {
     protected function success(?string $message = null, mixed $data = null, int $status = 200): JsonResponse
