@@ -42,7 +42,7 @@ test('event details includes the booking platform fee', function () {
         ->assertJsonPath('success', true)
         ->assertJsonPath('data.id', $event->id)
         ->assertJsonPath('data.name', 'Platform Fee Event')
-        ->assertJsonPath('data.platform_fee', 7);
+        ->assertJsonPath('data.booking_platform_fees_percentage', 7);
 });
 
 test('event details returns zero platform fee when the setting is missing', function () {
@@ -74,5 +74,5 @@ test('event details returns zero platform fee when the setting is missing', func
     test()->withToken($token)
         ->getJson('/api/organisation/event/details/'.$event->id)
         ->assertOk()
-        ->assertJsonPath('data.platform_fee', 0);
+        ->assertJsonPath('data.booking_platform_fees_percentage', 0);
 });

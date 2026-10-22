@@ -235,7 +235,7 @@ class EventService extends Service
         $event = $this->resolveOrganisationEvent($organisation->id, $eventId);
 
         $event->load(['images']);
-        $event->setAttribute('platform_fee', $this->bookingPlatformFee());
+        $event->setAttribute('booking_platform_fees_percentage', $this->bookingPlatformFee());
 
         return [
             'event' => $event,

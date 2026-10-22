@@ -49,9 +49,9 @@ class EventResource extends JsonResource
                     : null,
             ),
             'capacity' => $this->capacity,
-            'platform_fee' => $this->when(
-                array_key_exists('platform_fee', $this->resource->getAttributes()),
-                fn () => $this->platform_fee,
+            'booking_platform_fees_percentage' => $this->when(
+                array_key_exists('booking_platform_fees_percentage', $this->resource->getAttributes()),
+                fn () => $this->booking_platform_fees_percentage,
             ),
             'starts_at' => $this->starts_at,
             'ends_at' => $this->ends_at,
