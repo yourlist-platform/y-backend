@@ -49,6 +49,10 @@ class EventResource extends JsonResource
                     : null,
             ),
             'capacity' => $this->capacity,
+            'platform_fee' => $this->when(
+                array_key_exists('platform_fee', $this->resource->getAttributes()),
+                fn () => $this->platform_fee,
+            ),
             'starts_at' => $this->starts_at,
             'ends_at' => $this->ends_at,
             'timezone' => $this->timezone,
