@@ -48,4 +48,36 @@ class OrderService extends Service
             'paginator' => $paginator,
         ];
     }
+
+    /**
+     * One order for the authenticated customer, matched by unique id.
+     *
+     * @return array{order: Order}
+     */
+    public function statusForCustomer(User $user, string $orderUniqueId): array
+    {
+        if ($user->status !== StatusEnum::ACTIVE) {
+            $this->fail(Response::HTTP_FORBIDDEN, __('auth.inactive'));
+        }
+
+        $order = Order::query()
+            ->where('user_id', $user->id)
+            ->where('unique_id', $orderUniqueId)
+            ->with([
+                'items.event.venue.address',
+                'items.event.organisation:id,name',
+            ])
+            ->first();
+
+        if ($order === null) {
+            $this->fail(
+                Response::HTTP_NOT_FOUND,
+                __('messages.order_not_found'),
+            );
+        }
+
+        return [
+            'order' => $order,
+        ];
+    }
 }

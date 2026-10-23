@@ -115,6 +115,7 @@ return [
     'wishlist_already_exists' => 'Event is already in your wishlist.',
     'wishlist_not_found' => 'Wishlist item not found.',
     'my_orders_list' => 'My orders list.',
+    'public_order_status' => 'Order status.',
     'public_booking_offer_unavailable' => 'One or more selected offers are unavailable.',
     'public_booking_offer_sold_out' => 'One or more selected offers are sold out.',
     'public_booking_offer_quantity_exceeded' => 'Requested quantity exceeds the offer availability.',

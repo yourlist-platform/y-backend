@@ -6,7 +6,6 @@ use App\Enum\EventStatusEnum;
 use App\Enum\EventTicketOfferStatusEnum;
 use App\Enum\EventTicketStatusEnum;
 use App\Enum\OrderStatusEnum;
-use App\Enum\PlatformSettingKeyEnum;
 use App\Exceptions\ServiceException;
 use App\Http\Responses\CursorPaginatedResponse;
 use App\Models\Event;
@@ -15,7 +14,6 @@ use App\Models\EventTicket;
 use App\Models\EventTicketOffer;
 use App\Models\Order;
 use App\Models\Organisation;
-use App\Models\PlatformSetting;
 use App\Models\User;
 use App\Models\Venue;
 use App\Services\MediaService;
@@ -235,22 +233,10 @@ class EventService extends Service
         $event = $this->resolveOrganisationEvent($organisation->id, $eventId);
 
         $event->load(['images']);
-        $event->setAttribute('booking_platform_fees_percentage', $this->bookingPlatformFee());
 
         return [
             'event' => $event,
         ];
-    }
-
-    private function bookingPlatformFee(): int|float
-    {
-        $value = PlatformSetting::getValue(PlatformSettingKeyEnum::BOOKING_PLATFORM_FEES_PERCENTAGE, 0);
-
-        if (! is_numeric($value)) {
-            return 0;
-        }
-
-        return $value + 0;
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Enum\EventTicketStatusEnum;
 use App\Enum\OrderStatusEnum;
 use App\Enum\PaymentStatusEnum;
 use App\Enum\PermissionScopeEnum;
+use App\Enum\PlatformSettingKeyEnum;
 use App\Models\Event;
 use App\Models\EventTicket;
 use App\Models\EventTicketOffer;
@@ -13,6 +14,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Organisation;
 use App\Models\Payment;
+use App\Models\PlatformSetting;
 use App\Models\User;
 use App\Services\JwtTokenService;
 use App\Services\StripeService;
@@ -100,6 +102,60 @@ function mockStripePaymentIntent(): void
             ]);
     });
 }
+
+test('platform fee is added to the payable total and charged on the payment intent', function () {
+    Carbon::setTestNow(Carbon::parse('2026-10-06 12:00:00'));
+
+    PlatformSetting::query()->updateOrCreate(
+        ['key' => PlatformSettingKeyEnum::BOOKING_PLATFORM_FEES_PERCENTAGE->value],
+        ['value' => 5],
+    );
+
+    ['offer' => $offer] = publishedBookableOffer([
+        'price' => 90.00,
+    ]);
+    $customer = User::factory()->create();
+
+    test()->mock(StripeService::class, function (MockInterface $mock): void {
+        $mock->shouldReceive('createPaymentIntent')
+            ->once()
+            ->withArgs(function (Organisation $organisation, array $payload): bool {
+                return $payload['amount'] === '94.50'
+                    && $payload['currency'] === 'GBP';
+            })
+            ->andReturn([
+                'id' => 'pi_fee_123',
+                'client_secret' => 'pi_fee_123_secret',
+                'status' => 'requires_payment_method',
+                'amount' => 9450,
+                'currency' => 'gbp',
+            ]);
+    });
+
+    test()->withToken(customerToken($customer))
+        ->postJson('/api/public/start-booking-ticket', [
+            'offers' => [
+                ['offer_id' => $offer->id, 'qty' => 1],
+            ],
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.order.subtotal', '90.00')
+        ->assertJsonPath('data.order.discount_amount', '0.00')
+        ->assertJsonPath('data.order.platform_fee_amount', '4.50')
+        ->assertJsonPath('data.order.total_amount', '94.50')
+        ->assertJsonPath('data.payment.amount', '94.50');
+
+    $order = Order::query()->first();
+    $item = OrderItem::query()->first();
+    $payment = Payment::query()->first();
+
+    expect($order->total_amount)->toBe('94.50')
+        ->and($order->platform_fee_amount)->toBe('4.50')
+        ->and($payment->amount)->toBe('94.50')
+        ->and($item->total_price)->toBe('90.00')
+        ->and($item->platform_share_amount)->toBe('4.50')
+        ->and($item->organiser_share_amount)->toBe('90.00');
+});
 
 test('start booking requires authentication', function () {
     test()->postJson('/api/public/start-booking-ticket', [

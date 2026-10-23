@@ -2,7 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Enum\PlatformSettingKeyEnum;
 use App\Models\Event;
+use App\Models\PlatformSetting;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -49,10 +51,7 @@ class EventResource extends JsonResource
                     : null,
             ),
             'capacity' => $this->capacity,
-            'booking_platform_fees_percentage' => $this->when(
-                array_key_exists('booking_platform_fees_percentage', $this->resource->getAttributes()),
-                fn () => $this->booking_platform_fees_percentage,
-            ),
+            'booking_platform_fees_percentage' => $this->bookingPlatformFeesPercentage(),
             'starts_at' => $this->starts_at,
             'ends_at' => $this->ends_at,
             'timezone' => $this->timezone,
@@ -67,5 +66,18 @@ class EventResource extends JsonResource
             'created_by' => $this->created_by,
             'updated_by' => $this->updated_by,
         ];
+    }
+
+    private function bookingPlatformFeesPercentage(): int|float
+    {
+        return once(function (): int|float {
+            $value = PlatformSetting::getValue(PlatformSettingKeyEnum::BOOKING_PLATFORM_FEES_PERCENTAGE, 0);
+
+            if (! is_numeric($value)) {
+                return 0;
+            }
+
+            return $value + 0;
+        });
     }
 }

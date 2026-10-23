@@ -84,6 +84,7 @@ Route::middleware('jwt')->group(function () {
     // ########### Public Auth Routes ##################
     Route::prefix('public')->group(function () {
         Route::post('/start-booking-ticket', [PublicBookingController::class, 'startBookingTicket']);
+        Route::get('/order-status/{order_id}', [PublicOrderController::class, 'orderStatus']);
         Route::get('/my-orders-list', [PublicOrderController::class, 'myOrdersList']);
         Route::get('/get-wishlist', [PublicWishlistController::class, 'list']);
         Route::post('/move-to-wishlist', [PublicWishlistController::class, 'store']);

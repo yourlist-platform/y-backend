@@ -137,6 +137,65 @@ function paidOrderWithIssuedTicketFixture(User $customer): array
     ];
 }
 
+test('order status requires authentication', function () {
+    test()->getJson('/api/public/order-status/ORD123')->assertUnauthorized();
+});
+
+test('authenticated customer can read their order status after payment', function () {
+    $customer = User::factory()->create();
+    ['order' => $order] = paidOrderWithIssuedTicketFixture($customer);
+
+    $order->update([
+        'customer_phone' => '07123456789',
+        'discount_amount' => '2.00',
+        'tickets_pdf_path' => 'tickets/orders/'.$order->unique_id.'.pdf',
+    ]);
+
+    $response = test()->withToken(myOrdersCustomerToken($customer))
+        ->getJson('/api/public/order-status/'.$order->unique_id)
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('message', __('messages.public_order_status'))
+        ->assertJsonPath('data.unique_id', $order->unique_id)
+        ->assertJsonPath('data.status', OrderStatusEnum::PAID->value)
+        ->assertJsonPath('data.sales_channel', 'online')
+        ->assertJsonPath('data.subtotal', '20.00')
+        ->assertJsonPath('data.discount_amount', '2.00')
+        ->assertJsonPath('data.platform_fee_amount', '2.00')
+        ->assertJsonPath('data.total_amount', '20.00')
+        ->assertJsonPath('data.currency', 'GBP')
+        ->assertJsonPath('data.customer_name', 'Jane Doe')
+        ->assertJsonPath('data.customer_email', 'jane@example.com')
+        ->assertJsonPath('data.customer_phone', '07123456789')
+        ->assertJsonPath('data.tickets_pdf_path', 'tickets/orders/'.$order->unique_id.'.pdf')
+        ->assertJsonPath('data.items.0.ticket_name', 'General Admission')
+        ->assertJsonPath('data.items.0.offer_name', 'Early Bird')
+        ->assertJsonPath('data.items.0.quantity', 1)
+        ->assertJsonPath('data.items.0.total_price', '20.00')
+        ->assertJsonPath('data.event.name', 'Live Music Event')
+        ->assertJsonPath('data.event.timezone', 'Europe/London')
+        ->assertJsonPath('data.event.venue_name', 'ABC Venue')
+        ->assertJsonPath('data.event.location', 'London, Greater London, United Kingdom')
+        ->assertJsonPath(
+            'data.event.organisation_name',
+            $order->items()->first()->event->organisation->name,
+        );
+
+    expect($response->json('data.event.starts_at'))->not->toBeNull()
+        ->and($response->json('data.items.0'))->not->toHaveKey('event');
+});
+
+test('order status is hidden from another customer', function () {
+    $customer = User::factory()->create();
+    $otherCustomer = User::factory()->create();
+    ['order' => $order] = paidOrderWithIssuedTicketFixture($otherCustomer);
+
+    test()->withToken(myOrdersCustomerToken($customer))
+        ->getJson('/api/public/order-status/'.$order->unique_id)
+        ->assertNotFound()
+        ->assertJsonPath('message', __('messages.order_not_found'));
+});
+
 test('my orders list requires authentication', function () {
     test()->getJson('/api/public/my-orders-list')->assertUnauthorized();
 });

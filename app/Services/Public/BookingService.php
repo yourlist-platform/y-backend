@@ -20,6 +20,7 @@ use App\Models\PlatformSetting;
 use App\Models\User;
 use App\Services\Service;
 use App\Services\StripeService;
+use App\Support\CheckoutPricing;
 use App\Support\UniqueIdGenerator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -74,8 +75,6 @@ class BookingService extends Service
             $lockedOffers->load(['ticket.event.organisation']);
 
             $lineItems = [];
-            $subtotal = 0.0;
-            $platformFeeTotal = 0.0;
             $currency = null;
             $feeRate = $this->platformFeeRate();
             $primaryOrganisation = null;
@@ -123,14 +122,6 @@ class BookingService extends Service
                     );
                 }
 
-                $unitPrice = round((float) $offer->price, 2);
-                $lineTotal = round($unitPrice * $qty, 2);
-                $platformShare = round($lineTotal * ($feeRate / 100), 2);
-                $organiserShare = round($lineTotal - $platformShare, 2);
-
-                $subtotal = round($subtotal + $lineTotal, 2);
-                $platformFeeTotal = round($platformFeeTotal + $platformShare, 2);
-
                 $lineItems[] = [
                     'event_id' => $event->id,
                     'organisation_id' => $organisation->id,
@@ -140,12 +131,8 @@ class BookingService extends Service
                     'offer_name' => $offer->name,
                     'quantity' => $qty,
                     'pricing_type' => OrderItemPricingTypeEnum::PAID,
-                    'unit_price' => number_format($unitPrice, 2, '.', ''),
-                    'discount_amount' => '0.00',
-                    'total_price' => number_format($lineTotal, 2, '.', ''),
-                    'platform_fee_rate' => number_format($feeRate, 2, '.', ''),
-                    'platform_share_amount' => number_format($platformShare, 2, '.', ''),
-                    'organiser_share_amount' => number_format($organiserShare, 2, '.', ''),
+                    'unit_price' => round(max(0, (float) $offer->price), 2),
+                    'discount_amount' => 0,
                     'currency' => $lineCurrency,
                 ];
             }
@@ -157,8 +144,7 @@ class BookingService extends Service
                 );
             }
 
-            $discountAmount = 0.0;
-            $totalAmount = round($subtotal - $discountAmount, 2);
+            $pricing = CheckoutPricing::calculate($lineItems, $feeRate);
             $holdMinutes = max(1, (int) config('booking.hold_minutes', 15));
             $expiresAt = now()->addMinutes($holdMinutes);
 
@@ -170,10 +156,10 @@ class BookingService extends Service
                 'coupon_code' => null,
                 'status' => OrderStatusEnum::PENDING,
                 'sales_channel' => OrderSalesChannelEnum::ONLINE,
-                'subtotal' => number_format($subtotal, 2, '.', ''),
-                'discount_amount' => number_format($discountAmount, 2, '.', ''),
-                'platform_fee_amount' => number_format($platformFeeTotal, 2, '.', ''),
-                'total_amount' => number_format($totalAmount, 2, '.', ''),
+                'subtotal' => $pricing['subtotal'],
+                'discount_amount' => $pricing['discount_amount'],
+                'platform_fee_amount' => $pricing['platform_fee_amount'],
+                'total_amount' => $pricing['total_amount'],
                 'currency' => $currency,
                 'customer_name' => trim($user->first_name.' '.$user->last_name),
                 'customer_email' => $user->email,
@@ -182,10 +168,26 @@ class BookingService extends Service
                 'created_by' => $user->id,
             ]);
 
-            foreach ($lineItems as $lineItem) {
+            foreach ($lineItems as $index => $lineItem) {
+                $pricedLine = $pricing['lines'][$index];
+
                 OrderItem::query()->create([
                     'order_id' => $order->id,
-                    ...$lineItem,
+                    'event_id' => $lineItem['event_id'],
+                    'organisation_id' => $lineItem['organisation_id'],
+                    'event_ticket_id' => $lineItem['event_ticket_id'],
+                    'ticket_offer_id' => $lineItem['ticket_offer_id'],
+                    'ticket_name' => $lineItem['ticket_name'],
+                    'offer_name' => $lineItem['offer_name'],
+                    'quantity' => $pricedLine['quantity'],
+                    'pricing_type' => $lineItem['pricing_type'],
+                    'unit_price' => $pricedLine['unit_price'],
+                    'discount_amount' => $pricedLine['discount_amount'],
+                    'total_price' => $pricedLine['total_price'],
+                    'platform_fee_rate' => $pricedLine['platform_fee_rate'],
+                    'platform_share_amount' => $pricedLine['platform_share_amount'],
+                    'organiser_share_amount' => $pricedLine['organiser_share_amount'],
+                    'currency' => $lineItem['currency'],
                 ]);
             }
 
@@ -195,13 +197,13 @@ class BookingService extends Service
                 'order_id' => $order->id,
                 'provider' => PaymentProviderEnum::STRIPE,
                 'status' => PaymentStatusEnum::PENDING,
-                'amount' => number_format($totalAmount, 2, '.', ''),
+                'amount' => $pricing['total_amount'],
                 'currency' => $currency,
                 'idempotency_key' => $idempotencyKey,
             ]);
 
             $intent = $this->stripe->createPaymentIntent($primaryOrganisation, [
-                'amount' => $totalAmount,
+                'amount' => $pricing['total_amount'],
                 'currency' => $currency,
                 'idempotency_key' => $idempotencyKey,
                 'receipt_email' => $user->email,

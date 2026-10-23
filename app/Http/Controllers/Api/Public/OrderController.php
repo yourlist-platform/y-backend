@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\MyOrderResource;
+use App\Http\Resources\PublicOrderStatusResource;
 use App\Services\Public\OrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,24 @@ class OrderController extends Controller
     /**
      * Cursor-paginated orders for the authenticated customer (with tickets + scan codes).
      */
+    /**
+     * Order details and payment status for the authenticated customer.
+     * {order_id} is the order unique_id returned when booking starts.
+     */
+    public function orderStatus(Request $request, OrderService $orders, string $order_id): JsonResponse
+    {
+        try {
+            $response = $orders->statusForCustomer($request->user(), $order_id);
+
+            return $this->success(
+                __('messages.public_order_status'),
+                PublicOrderStatusResource::make($response['order']),
+            );
+        } catch (Throwable $exception) {
+            return $this->failed($exception);
+        }
+    }
+
     public function myOrdersList(Request $request, OrderService $orders): JsonResponse
     {
         try {
